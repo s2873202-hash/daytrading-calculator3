@@ -272,7 +272,6 @@
             <th class="text-center">檔位</th>
             <th class="text-center">出場價格</th>
             <th>漲跌幅</th>
-            <th>預估總手續費</th>
             <th>淨損益 (元)</th>
             <th>報酬率 (%)</th>
             <th class="text-center">盈虧比/停損標記</th>
@@ -286,7 +285,7 @@
 </div>
 
 <script>
-  const STORAGE_KEY = 'daytrade_table_notax';
+  const STORAGE_KEY = 'daytrade_table_clean';
 
   // 新增進場列
   function addEntryRow(price = '', shares = '1') {
@@ -376,7 +375,7 @@
     const netProfit = rawProfit - totalFee - taxAndBorrowFee;
     const returnRate = buyAmount > 0 ? ((netProfit / buyAmount) * 100).toFixed(2) : '0.00';
 
-    return { buyAmount, totalFee, netProfit, returnRate };
+    return { buyAmount, netProfit, returnRate };
   }
 
   // 寫入 localStorage 儲存輸入數值
@@ -530,7 +529,6 @@
         <td class="${priceDiffPercent > 0 ? 'text-profit' : (priceDiffPercent < 0 ? 'text-loss' : '')}">
           ${priceDiffPercent > 0 ? '+' : ''}${priceDiffPercent}%
         </td>
-        <td>$${item.totalFee.toLocaleString()}</td>
         <td class="${profitClass}">$${item.netProfit.toLocaleString()}</td>
         <td class="${profitClass}">${returnRate}%</td>
         <td class="text-center">${noteTag}</td>
