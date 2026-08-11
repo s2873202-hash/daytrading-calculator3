@@ -242,6 +242,10 @@
         </select>
       </div>
       <div class="form-group">
+        <label for="discount">手續費折扣 (折)</label>
+        <input type="number" id="discount" value="2.8" step="0.1" min="0" max="10" oninput="calculate()">
+      </div>
+      <div class="form-group">
         <label for="stopTicks">停損設定 (退幾檔)</label>
         <input type="number" id="stopTicks" value="1" min="1" max="10" oninput="calculate()">
       </div>
@@ -268,7 +272,7 @@
             <th class="text-center">檔位</th>
             <th class="text-center">出場價格</th>
             <th>漲跌幅</th>
-            <th>預估交易稅/券資費</th>
+            <th>預估總手續費</th>
             <th>淨損益 (元)</th>
             <th>報酬率 (%)</th>
             <th class="text-center">盈虧比/停損標記</th>
@@ -282,7 +286,7 @@
 </div>
 
 <script>
-  const STORAGE_KEY = 'daytrade_table_nofee';
+  const STORAGE_KEY = 'daytrade_table_notax';
 
   // 新增進場列
   function addEntryRow(price = '', shares = '1') {
@@ -336,7 +340,8 @@
     return price;
   }
 
-  function calculateNetProfit(action, avgEntryPrice, exitPrice, totalShares) {
+  function calculateNetProfit(action, avgEntryPrice, exitPrice, totalShares, discountRatio) {
+    const baseFeeRate = 0.001425;
     const taxRate = 0.0015;
     const borrowFeeRate = 0.0008;
 
@@ -352,6 +357,14 @@
     const buyAmount = buyPrice * totalShares;
     const sellAmount = sellPrice * totalShares;
 
+    let buyFee = Math.floor(buyAmount * baseFeeRate * discountRatio);
+    if (buyFee < 20) buyFee = 20;
+
+    let sellFee = Math.floor(sellAmount * baseFeeRate * discountRatio);
+    if (sellFee < 20) sellFee = 20;
+
+    const totalFee = buyFee + sellFee;
+
     let taxAndBorrowFee = 0;
     if (action === 'long') {
       taxAndBorrowFee = Math.floor(sellAmount * taxRate);
@@ -360,10 +373,10 @@
     }
 
     const rawProfit = sellAmount - buyAmount;
-    const netProfit = rawProfit - taxAndBorrowFee;
+    const netProfit = rawProfit - totalFee - taxAndBorrowFee;
     const returnRate = buyAmount > 0 ? ((netProfit / buyAmount) * 100).toFixed(2) : '0.00';
 
-    return { buyAmount, taxAndBorrowFee, netProfit, returnRate };
+    return { buyAmount, totalFee, netProfit, returnRate };
   }
 
   // 寫入 localStorage 儲存輸入數值
@@ -382,6 +395,7 @@
     const data = {
       entries: entries,
       action: document.getElementById('action').value,
+      discount: document.getElementById('discount').value,
       stopTicks: document.getElementById('stopTicks').value,
       rrRatio: document.getElementById('rrRatio').value
     };
@@ -400,6 +414,7 @@
     try {
       const data = JSON.parse(saved);
       document.getElementById('action').value = data.action || 'long';
+      document.getElementById('discount').value = data.discount || '2.8';
       document.getElementById('stopTicks').value = data.stopTicks || '1';
       document.getElementById('rrRatio').value = data.rrRatio || '2';
 
@@ -420,6 +435,7 @@
     saveData();
 
     const action = document.getElementById('action').value;
+    const discountRatio = (parseFloat(document.getElementById('discount').value) || 10) / 10;
     const stopTicks = parseInt(document.getElementById('stopTicks').value) || 1;
     const rrRatioTarget = parseInt(document.getElementById('rrRatio').value) || 2;
 
@@ -453,14 +469,14 @@
     // 計算停損淨虧損金額
     const stopStep = action === 'long' ? -stopTicks : stopTicks;
     const stopExitPrice = getPriceBySteps(avgEntryPrice, stopStep);
-    const stopRes = calculateNetProfit(action, avgEntryPrice, stopExitPrice, totalShares);
+    const stopRes = calculateNetProfit(action, avgEntryPrice, stopExitPrice, totalShares, discountRatio);
     const expectedRiskAmount = Math.abs(stopRes.netProfit);
 
     // 試算上下 10 檔數據
     const rows = [];
     for (let i = 10; i >= -10; i--) {
       const exitPrice = getPriceBySteps(avgEntryPrice, i);
-      const res = calculateNetProfit(action, avgEntryPrice, exitPrice, totalShares);
+      const res = calculateNetProfit(action, avgEntryPrice, exitPrice, totalShares, discountRatio);
       rows.push({ step: i, exitPrice, ...res });
     }
 
@@ -514,7 +530,7 @@
         <td class="${priceDiffPercent > 0 ? 'text-profit' : (priceDiffPercent < 0 ? 'text-loss' : '')}">
           ${priceDiffPercent > 0 ? '+' : ''}${priceDiffPercent}%
         </td>
-        <td>$${item.taxAndBorrowFee.toLocaleString()}</td>
+        <td>$${item.totalFee.toLocaleString()}</td>
         <td class="${profitClass}">$${item.netProfit.toLocaleString()}</td>
         <td class="${profitClass}">${returnRate}%</td>
         <td class="text-center">${noteTag}</td>
